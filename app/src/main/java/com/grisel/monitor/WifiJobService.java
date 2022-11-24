@@ -1,14 +1,16 @@
 package com.grisel.monitor;
 
+import android.app.job.JobInfo;
 import android.app.job.JobParameters;
+import android.app.job.JobScheduler;
 import android.app.job.JobService;
+import android.content.ComponentName;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.util.Log;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
@@ -21,10 +23,21 @@ public class WifiJobService extends JobService {
 
     @Override
     public boolean onStartJob(JobParameters params) {
+        this.scheduleJobWiFi();
         Log.d("Wifi", "onStartJob id=" + params.getJobId());
         wifiThread thread = new wifiThread(this, params);
         thread.start();
         return true;
+    }
+
+    public final void scheduleJobWiFi() {
+        ComponentName serviceName = new
+                ComponentName(this, WifiJobService.class);
+        JobInfo jobInfo = new JobInfo.Builder(1, serviceName)
+                .setMinimumLatency(5000)
+                .build();
+        JobScheduler scheduler = (JobScheduler) getSystemService(Context.JOB_SCHEDULER_SERVICE);
+        int result = scheduler.schedule(jobInfo);
     }
 
     @Override
@@ -61,7 +74,11 @@ public class WifiJobService extends JobService {
             values.put(SensorEntryContract.SensorEntry.COLUMN_NAME_VALUE, getWifiAPs());
             values.put(SensorEntryContract.SensorEntry.COLUMN_NAME_DATETIME, time);
 
+            db.beginTransaction();
             long newRowId = db.insert(SensorEntryContract.SensorEntry.TABLE_NAME, null, values);
+            db.setTransactionSuccessful();
+            db.endTransaction();
+            db.close();
 
             wifiJobService.jobFinished(params, false);
         }
